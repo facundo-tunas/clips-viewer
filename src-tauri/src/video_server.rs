@@ -1,7 +1,7 @@
-use tiny_http::{Header, Response, Server, StatusCode};
 use std::fs;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
+use tiny_http::{Header, Response, Server, StatusCode};
 
 pub fn start() -> u16 {
     let server = Server::http("127.0.0.1:0").expect("Failed to start video server");
@@ -113,7 +113,10 @@ fn serve_file(request: tiny_http::Request, file_path: &str) {
                     None,
                 )
                 .with_chunked_threshold(usize::MAX);
-                eprintln!("[video_server] responded 206 Partial Content, Content-Length={}", content_len);
+                eprintln!(
+                    "[video_server] responded 206 Partial Content, Content-Length={}",
+                    content_len
+                );
                 let _ = request.respond(resp);
             }
             Err(e) => {
@@ -134,7 +137,10 @@ fn serve_file(request: tiny_http::Request, file_path: &str) {
                     None,
                 )
                 .with_chunked_threshold(usize::MAX);
-                eprintln!("[video_server] responded 200 OK, Content-Length={}", file_size);
+                eprintln!(
+                    "[video_server] responded 200 OK, Content-Length={}",
+                    file_size
+                );
                 let _ = request.respond(resp);
             }
             Err(e) => {
@@ -169,11 +175,7 @@ fn parse_range(header: &str, file_size: u64) -> Option<(u64, u64)> {
 }
 
 fn get_mime_type(path: &Path) -> &'static str {
-    match path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-    {
+    match path.extension().and_then(|e| e.to_str()).unwrap_or("") {
         "mp4" => "video/mp4",
         "webm" => "video/webm",
         "avi" => "video/x-msvideo",

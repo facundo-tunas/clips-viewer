@@ -6,7 +6,7 @@ import {
 } from "@tauri-apps/plugin-fs";
 import { documentDir, join } from "@tauri-apps/api/path";
 import { getName } from "@tauri-apps/api/app";
-import { Settings } from "../types/settings";
+import { RecordingMethod, Settings } from "../types/settings";
 
 export const loadSettings = async (
   setSettings: React.Dispatch<React.SetStateAction<Settings>> | null,
@@ -28,7 +28,7 @@ export const loadSettings = async (
 
   try {
     const settingsData = await readTextFile(settingsPath);
-    const settings = JSON.parse(settingsData);
+    const settings = normalizeSettings(JSON.parse(settingsData));
 
     if (setSettings) {
       setSettings(settings);
@@ -40,6 +40,32 @@ export const loadSettings = async (
   } catch (error) {
     console.error("Failed to load settings:", error);
   }
+};
+
+export const normalizeSettings = (rawSettings: Partial<Settings>): Settings => {
+  const recordingMethod: RecordingMethod =
+    rawSettings.recordingMethod === "gpu-screen-recorder"
+      ? "gpu-screen-recorder"
+      : "obs";
+
+  return {
+    ...defaultSettings,
+    ...rawSettings,
+    gamesConfig: rawSettings.gamesConfig ?? {},
+    obs: {
+      ...defaultSettings.obs,
+      ...(rawSettings.obs ?? {}),
+    },
+    gsr: {
+      ...defaultSettings.gsr,
+      ...(rawSettings.gsr ?? {}),
+      audioDevices:
+        rawSettings.gsr?.audioDevices?.length
+          ? rawSettings.gsr.audioDevices
+          : defaultSettings.gsr.audioDevices,
+    },
+    recordingMethod,
+  };
 };
 
 export const saveSettings = async (settings: Settings) => {
@@ -71,6 +97,13 @@ export const defaultSettings: Settings = {
   obs: {
     port: "0",
     password: "",
+  },
+  gsr: {
+    captureTarget: "portal",
+    fps: 60,
+    codec: "auto",
+    audioDevices: ["default_output"],
+    replaySeconds: 120,
   },
   accentVariable: "--red",
   recordingSoundEnabled: true,

@@ -1124,6 +1124,7 @@ dependencies = [
  "chrono",
  "dirs",
  "filetime",
+ "libc",
  "regex",
  "serde",
  "serde_json",

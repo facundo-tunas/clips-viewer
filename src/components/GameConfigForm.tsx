@@ -265,12 +265,6 @@ const GameConfigForm = React.memo<GameConfigFormProps>(
             <p>No games added yet.</p>
           )}
         </div>
-
-        {settings.recordingMethod === "wgc" && (
-          <div className={styles.themeDescription}>
-            <p>WGC is selected. All sessions will be fully recorded.</p>
-          </div>
-        )}
       </div>
     );
   },

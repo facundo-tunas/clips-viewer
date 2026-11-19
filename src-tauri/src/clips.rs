@@ -172,15 +172,15 @@ fn generate_thumbnail_if_missing(app_name: &str, video_path: &str) -> Result<Str
             "-vf",
             "scale=640:-1",
             "-c:v",
-            "libwebp", 
+            "libwebp",
             "-lossless",
             "0",
             "-compression_level",
-            "6", 
+            "6",
             "-q:v",
-            "75", 
+            "75",
             "-y",
-            thumb_path.to_str().unwrap(), 
+            thumb_path.to_str().unwrap(),
         ])
         .stdout(Stdio::null())
         .status()
@@ -424,29 +424,6 @@ fn process_directory_newer(
     since_timestamp: i64,
     all_clips: &mut Vec<ClipInfo>,
 ) -> Result<(), String> {
-    if game.is_some() {
-        let dir_metadata = fs::metadata(dir_path).map_err(|e| {
-            format!(
-                "Error getting directory metadata for {}: {}",
-                dir_path.display(),
-                e
-            )
-        })?;
-
-        let dir_modified = dir_metadata
-            .modified()
-            .map_err(|e| format!("Error getting directory modification time: {}", e))?;
-
-        let dir_timestamp = dir_modified
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| "Error calculating directory timestamp".to_string())?
-            .as_secs() as i64;
-
-        if dir_timestamp <= since_timestamp {
-            return Ok(());
-        }
-    }
-
     let entries = fs::read_dir(dir_path)
         .map_err(|e| format!("Error reading directory {}: {}", dir_path.display(), e))?;
 

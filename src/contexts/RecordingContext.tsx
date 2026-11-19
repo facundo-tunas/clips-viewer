@@ -37,6 +37,7 @@ interface RecordingContextValue {
   setObsSettings: (settings: OBSSettings) => void;
   startGameDetection: (settings: { gamesConfig: GamesConfig }) => void;
   recordingMethod: RecordingMethod;
+  gsrSupported: boolean | null;
 }
 
 const RecordingContext = createContext<RecordingContextValue | undefined>(
@@ -57,6 +58,24 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
     version: null,
     error: null,
   });
+  const [gsrSupported, setGsrSupported] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    invoke<boolean>("gsr_supported")
+      .then((supported) => {
+        if (!cancelled) setGsrSupported(supported);
+      })
+      .catch((error) => {
+        console.error("Failed to check GPU Screen Recorder support:", error);
+        if (!cancelled) setGsrSupported(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const obsSettings = settings.obs;
   const setObsSettings = (update: Partial<OBSSettings>) => {
@@ -123,22 +142,51 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
   }, []);
 
   useEffect(() => {
+    if (gsrSupported === null) return;
+
     const initialize = async () => {
       try {
         if (
-          settings.recordingMethod === "obs" &&
-          obsSettings.port &&
-          obsSettings.password
+          !gsrSupported &&
+          settings.recordingMethod === "gpu-screen-recorder"
         ) {
-          await connect(obsSettings.port, obsSettings.password);
+          setSettings((current) => ({
+            ...current,
+            recordingMethod: "obs",
+          }));
+          return;
         }
+
+        if (settings.recordingMethod === "obs") {
+          if (obsSettings.port && obsSettings.password) {
+            await connect(obsSettings.port, obsSettings.password);
+          }
+          return;
+        }
+
+        const status = await invoke<{
+          available: boolean;
+          version: string | null;
+          error: string | null;
+        }>("gsr_check");
+
+        setConnection({
+          status: status.available ? "connected" : "error",
+          version: status.version,
+          error: status.error,
+        });
       } catch (error) {
         console.error("Failed to initialize recording context:", error);
+        setConnection({
+          status: "error",
+          version: null,
+          error: (error as Error).message,
+        });
       }
     };
 
     initialize();
-  }, [obsSettings, settings.recordingMethod]);
+  }, [gsrSupported, obsSettings, settings.recordingMethod]);
 
   useEffect(() => {
     if (loadedSettings && connection.status === "connected") {
@@ -168,55 +216,102 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
     }
   };
 
+  const detectNewClips = async () => {
+    const lastChecked = localStorage.getItem("lastCheckedTimestamp");
+    if (!lastChecked || !settings.gamesDir) return;
+
+    const sinceTimestamp = parseInt(lastChecked, 10);
+    const newClips = await invoke<Clip[]>("get_new_clips_since", {
+      dir: settings.gamesDir,
+      sinceTimestamp,
+    });
+
+    console.log(lastChecked, newClips)
+
+    if (newClips.length > 0) {
+      const now = Math.floor(Date.now() / 1000);
+      localStorage.setItem("lastCheckedTimestamp", now.toString());
+
+      window.dispatchEvent(
+        new CustomEvent("newClipsDetected", { detail: newClips }),
+      );
+    }
+  };
+
   const startRecording = async (
     currentGame: string,
     record: boolean,
   ): Promise<{ success: boolean; message?: string }> => {
-    if (settings.recordingMethod === "obs") {
-      if (settings.gamesDir) {
-        await setOutputPathForGame(currentGame, settings.gamesDir);
+    try {
+      if (settings.recordingMethod === "obs") {
+        if (settings.gamesDir) {
+          await setOutputPathForGame(currentGame, settings.gamesDir);
+        }
+        return await startOBSRecording(
+          currentGame,
+          record,
+          settings.recordingSoundEnabled,
+          playSound,
+        );
       }
-      return await startOBSRecording(
-        currentGame,
-        record,
-        settings.recordingSoundEnabled,
-        playSound,
-      );
-    }
 
-    return { success: false, message: "Unknown recording method" };
+      if (settings.recordingMethod === "gpu-screen-recorder") {
+        if (!settings.gamesDir) {
+          return {
+            success: false,
+            message: "Clips directory is not configured",
+          };
+        }
+
+        await invoke("gsr_start_session", {
+          gameName: currentGame,
+          gamesDir: settings.gamesDir,
+          options: {
+            captureTarget: settings.gsr.captureTarget,
+            fps: settings.gsr.fps,
+            codec: settings.gsr.codec,
+            audioDevices: settings.gsr.audioDevices,
+            replaySeconds: settings.gsr.replaySeconds,
+            record,
+          },
+        });
+
+        if (settings.recordingSoundEnabled) playSound();
+
+        return { success: true };
+      }
+
+      return { success: false, message: "Unknown recording method" };
+    } catch (error) {
+      console.error("Failed to start recording:", error);
+      return { success: false, message: (error as Error).message };
+    }
   };
 
   const stopRecording = async (
     record: boolean,
   ): Promise<{ success: boolean; message?: string }> => {
-    if (settings.recordingMethod === "obs") {
-      const result = await stopOBSRecording(record);
+    try {
+      let result: { success: boolean; message?: string };
 
-      const lastChecked = localStorage.getItem("lastCheckedTimestamp");
-      if (lastChecked && settings.gamesDir) {
-        const sinceTimestamp = parseInt(lastChecked, 10);
+      if (settings.recordingMethod === "obs") {
+        result = await stopOBSRecording(record);
+      } else if (settings.recordingMethod === "gpu-screen-recorder") {
+        await invoke("gsr_stop_session");
+        result = { success: true };
+      } else {
+        return { success: false, message: "Unknown recording method" };
+      }
 
-        const newClips = await invoke<Clip[]>("get_new_clips_since", {
-          dir: settings.gamesDir,
-          sinceTimestamp,
-        });
-        console.log(newClips);
-
-        if (newClips.length > 0) {
-          const now = Math.floor(Date.now() / 1000);
-          localStorage.setItem("lastCheckedTimestamp", now.toString());
-
-          window.dispatchEvent(
-            new CustomEvent("newClipsDetected", { detail: newClips }),
-          );
-        }
+      if (result.success) {
+        await detectNewClips();
       }
 
       return result;
+    } catch (error) {
+      console.error("Failed to stop recording:", error);
+      return { success: false, message: (error as Error).message };
     }
-
-    return { success: false, message: "Unknown recording method" };
   };
 
   async function getForegroundWindowTitle(): Promise<string | null> {
@@ -279,7 +374,6 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
   function startGameDetection(gameSettings: { gamesConfig: GamesConfig }) {
     let lastDetectedRecord: boolean | null = null;
     let lastDetectedGame: string | null = null;
-    let lastDetectedExe: string | null = null;
 
     const interval = setInterval(async () => {
       if (isRecordingInProgress.current) return;
@@ -320,9 +414,7 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
 
           try {
             await stopRecording(lastDetectedRecord ?? false);
-            console.log(
-              `Stopped recording for ${lastDetectedGame} (${lastDetectedExe})`,
-            );
+            console.log(`Stopped recording for ${lastDetectedGame}`);
 
             await new Promise((resolve) => setTimeout(resolve, 5000));
           } catch (error) {
@@ -351,6 +443,7 @@ export const RecordingProvider = ({ children }: RecordingProviderProps) => {
     setObsSettings,
     startGameDetection,
     recordingMethod: settings.recordingMethod,
+    gsrSupported,
   };
 
   return (

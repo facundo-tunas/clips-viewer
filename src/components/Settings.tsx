@@ -7,10 +7,12 @@ import { Aperture, Folder, LucideSettings2 } from "lucide-react";
 import SettingButton from "./SettingButton";
 
 import ObsConnectionForm from "./ObsConnectionForm";
+import GsrSettingsForm from "./GsrSettingsForm";
 import GameConfigForm from "./GameConfigForm";
 
 import { invoke } from "@tauri-apps/api/core";
 import { usePopup } from "../contexts/PopupContext";
+import { useRecording } from "../contexts/RecordingContext";
 import { useSettings } from "../contexts/SettingsContext";
 import { ThemeFamilyControl } from "./ThemeFamily";
 import { AppearanceModeControl } from "./ThemeAppearance";
@@ -26,6 +28,7 @@ const MIN_COLUMN_WIDTH = 500;
 const Settings = forwardRef<HTMLDivElement, SettingsProps>(
   ({ onClose }, ref) => {
     const { settings, setSettings } = useSettings();
+    const { gsrSupported } = useRecording();
     const containerRef = useRef<HTMLDivElement>(null);
     const [columnCount, setColumnCount] = useState(2);
 
@@ -153,6 +156,25 @@ const Settings = forwardRef<HTMLDivElement, SettingsProps>(
       );
     };
 
+    const handleToggleRecordingMethod = () => {
+      const nextMethod =
+        settings.recordingMethod === "obs"
+          ? "gpu-screen-recorder"
+          : "obs";
+
+      setSettings((prevSettings) => ({
+        ...prevSettings,
+        recordingMethod: nextMethod,
+      }));
+
+      showPopup(
+        `Recording method set to ${
+          nextMethod === "obs" ? "OBS" : "GPU Screen Recorder"
+        }.`,
+        true,
+      );
+    };
+
     const handleBackup = async () => {
       try {
         const backupId = "backup-process";
@@ -274,10 +296,23 @@ const Settings = forwardRef<HTMLDivElement, SettingsProps>(
             <div className={styles.title}>
               <Aperture />
               <h3>Recording</h3>
-              <SettingButton text={"OBS"} func={() => console.log("Xd")} />
+              {gsrSupported && (
+                <SettingButton
+                  text={
+                    settings.recordingMethod === "obs"
+                      ? "OBS"
+                      : "GPU Screen Recorder"
+                  }
+                  func={handleToggleRecordingMethod}
+                />
+              )}
             </div>
 
             {settings.recordingMethod === "obs" && <ObsConnectionForm />}
+            {gsrSupported &&
+              settings.recordingMethod === "gpu-screen-recorder" && (
+                <GsrSettingsForm />
+              )}
             <GameConfigForm
               settings={settings}
               setSettings={setSettings}

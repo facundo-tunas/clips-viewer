@@ -1,6 +1,7 @@
 mod backup;
 mod clips;
 mod delete;
+mod gsr;
 #[cfg(target_os = "linux")]
 mod video_server;
 
@@ -12,9 +13,9 @@ use tauri::tray::TrayIconBuilder;
 use tauri::Manager;
 
 use serde::Serialize;
-use std::io::{BufRead, BufReader};
 #[cfg(windows)]
 use std::io::Write;
+use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
 
 use tauri::Emitter;
@@ -78,7 +79,11 @@ async fn get_running_processes() -> Result<ProcessInfo, String> {
             .lines()
             .filter_map(|line| {
                 let name = line.trim().to_lowercase();
-                if name.is_empty() { None } else { Some(name) }
+                if name.is_empty() {
+                    None
+                } else {
+                    Some(name)
+                }
             })
             .collect();
 
@@ -136,11 +141,8 @@ async fn get_foreground_window_title() -> Result<String, String> {
                     .output()
                 {
                     if output.status.success() {
-                        let window: serde_json::Value =
-                            serde_json::from_slice(&output.stdout)
-                                .map_err(|e| {
-                                    format!("Failed to parse hyprctl output: {}", e)
-                                })?;
+                        let window: serde_json::Value = serde_json::from_slice(&output.stdout)
+                            .map_err(|e| format!("Failed to parse hyprctl output: {}", e))?;
 
                         if let Some(title) = window["title"].as_str() {
                             return Ok(title.to_string());
@@ -160,9 +162,7 @@ async fn get_foreground_window_title() -> Result<String, String> {
                     return Err("xdotool failed to get window title".into());
                 }
 
-                return Ok(String::from_utf8_lossy(&output.stdout)
-                    .trim()
-                    .to_string());
+                return Ok(String::from_utf8_lossy(&output.stdout).trim().to_string());
             }
 
             Err("Could not determine the active window".into())
@@ -347,10 +347,11 @@ fn get_video_server_port() -> u16 {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-   #[cfg(target_os = "linux")]
+    #[cfg(target_os = "linux")]
     std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
 
     tauri::Builder::default()
+        .manage(gsr::GsrState::default())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             start_video_server();
@@ -364,8 +365,12 @@ pub fn run() {
                 .id("reload")
                 .build(app)
                 .unwrap();
+            let save_replay = MenuItemBuilder::new("Save Replay")
+                .id("save-replay")
+                .build(app)
+                .unwrap();
             let menu = MenuBuilder::new(app)
-                .items(&[&quit, &hide, &show, &reload])
+                .items(&[&quit, &hide, &show, &reload, &save_replay])
                 .build()
                 .unwrap();
 
@@ -377,7 +382,13 @@ pub fn run() {
                 .menu(&menu)
                 // events handling here
                 .on_menu_event(|app, event| match event.id().as_ref() {
-                    "quit" => app.exit(0),
+                    "quit" => {
+                        gsr::shutdown(app.state::<gsr::GsrState>().inner());
+                        app.exit(0)
+                    }
+                    "save-replay" => {
+                        gsr::save_replay_from_state(app.state::<gsr::GsrState>().inner())
+                    }
                     "hide" => {
                         dbg!("menu item hide clicked");
                         let window = app.get_webview_window("main").unwrap();
@@ -412,6 +423,11 @@ pub fn run() {
             backup_favourite_clips,
             get_new_clips_since,
             get_video_server_port,
+            gsr::gsr_check,
+            gsr::gsr_supported,
+            gsr::gsr_start_session,
+            gsr::gsr_stop_session,
+            gsr::gsr_save_replay,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

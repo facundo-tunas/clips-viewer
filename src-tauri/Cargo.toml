@@ -33,4 +33,5 @@ tauri = { version = "2.11.3", features = ["protocol-asset", "tray-icon"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 tiny_http = "0.12"
+libc = "0.2"
 
