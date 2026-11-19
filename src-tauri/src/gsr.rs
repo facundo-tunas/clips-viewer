@@ -389,10 +389,9 @@ fn build_args(
 ) -> Vec<String> {
     let mut args = Vec::new();
 
-    let capture_target = if is_wayland() || options.capture_target.trim().is_empty() {
-        "portal"
-    } else {
-        options.capture_target.trim()
+    let capture_target = match options.capture_target.trim() {
+        "" => "portal",
+        target => target,
     };
 
     args.push("-w".to_string());

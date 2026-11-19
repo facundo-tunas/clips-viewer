@@ -75,8 +75,14 @@ const GsrSettingsForm = React.memo(() => {
   }, [refreshStatus]);
 
   const captureOptions = Array.from(
-    new Set(["portal", ...(status?.captureOptions ?? [])]),
+    new Set(["portal", "screen"]),
   );
+
+  const getCaptureLabel = (option: string) => {
+    if (option === "portal") return "Portal (choose each time)";
+    if (option === "screen") return "Fullscreen";
+    return option;
+  };
 
   const audioDevices = status?.audioDevices ?? [];
 
@@ -172,26 +178,20 @@ const GsrSettingsForm = React.memo(() => {
           : (status?.error ?? "Checking gpu-screen-recorder...")}
       </div>
 
-      {!status?.isWayland && (
-        <div className={styles.inputGroup}>
-          <label htmlFor="gsrCaptureTarget">Capture Target</label>
-          <input
-            autoComplete="off"
-            id="gsrCaptureTarget"
-            list="gsr-capture-targets"
-            value={settings.gsr.captureTarget}
-            onChange={(event) =>
-              updateGsr({ captureTarget: event.target.value })
-            }
-            placeholder="portal"
-          />
-          <datalist id="gsr-capture-targets">
-            {captureOptions.map((option) => (
-              <option key={option} value={option} />
-            ))}
-          </datalist>
-        </div>
-      )}
+      <div className={styles.inputGroup}>
+        <label htmlFor="gsrCaptureTarget">Capture Target</label>
+        <select
+          id="gsrCaptureTarget"
+          value={settings.gsr.captureTarget || "portal"}
+          onChange={(event) => updateGsr({ captureTarget: event.target.value })}
+        >
+          {captureOptions.map((option) => (
+            <option key={option} value={option}>
+              {getCaptureLabel(option)}
+            </option>
+          ))}
+        </select>
+      </div>
 
       <div className={styles.inputGroup}>
         <label htmlFor="gsrFps">FPS</label>
