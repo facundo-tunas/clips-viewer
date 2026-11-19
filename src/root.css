@@ -51,7 +51,7 @@
   --lavender: var(--ctp-latte-lavender);
 
   /* backgrounds */
-  --page-bg: var(--ctp-latte-base);
+  --page-bg: #ffffff;
   --content-bg: var(--ctp-latte-surface0);
   --dark-bg: var(--ctp-latte-crust);
 

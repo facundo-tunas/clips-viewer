@@ -1,14 +1,14 @@
 .notificationsContainer {
   --success: var(--green);
-  --success-text: #ffffff;
+  --success-text: var(--color);
 
   --error: var(--red);
-  --error-text: #ffffff;
+  --error-text: var(--color);
 
   --info: var(--blue);
-  --info-text: #ffffff;
+  --info-text: var(--color);
 
-  --background: var(--dark-bg);
+  --background: var(--page-bg);
   --border-radius: var(--radius-small);
 }
 
@@ -25,6 +25,7 @@
 
 .popup {
   font-size: 0.9rem;
+
   background-color: var(--background);
 
   border: 1px solid #333333;
@@ -99,7 +100,7 @@
 .persistentNotification {
   border-left: 4px solid var(--info);
   background-color: var(--background);
-  color: white;
+  color: var(--info-text);
 
   padding: 15px;
   border-radius: var(--border-radius);
